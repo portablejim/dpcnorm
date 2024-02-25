@@ -49,7 +49,7 @@ fn main() {
     let output_file = output_file_path.to_str().unwrap_or("");
 
     let filter_params: String = loop {
-        match tinyfiledialogs::input_box("Update Filter Settings", "Filter settings:", "loudnorm,speechnorm=e=6.25:r=0.00001,loudnorm=I=-14:tp=-0.1") {
+        match tinyfiledialogs::input_box("Update Filter Settings", "Filter settings:", "speechnorm=e=6.25:r=0.00001,loudnorm=I=-14:tp=-0.1") {
             Some(input) => break input,
             None => (),
         }
