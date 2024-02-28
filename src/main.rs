@@ -37,6 +37,8 @@ fn main() {
         default_settings
     };
 
+    let ffmpeg_path = "./ffmpeg";
+
     let input_file_extensions = (["*.wav", "*.aiff"].as_ref(), "AIFF/WAV Audio Files");
     let input_file: String = loop {
         match tinyfiledialogs::open_file_dialog("Select Input File", "", Some(input_file_extensions)) {
@@ -91,7 +93,7 @@ fn main() {
     }
 
     println!("Checking input file...");
-    let volume_command_output_result = Command::new("ffmpeg")
+    let volume_command_output_result = Command::new(ffmpeg_path)
         .args([
             "-hide_banner",
             "-i",
@@ -103,6 +105,11 @@ fn main() {
             "/dev/null"
         ])
         .output();
+
+    if volume_command_output_result.is_err()
+    {
+        println!("volume check: {:?}", volume_command_output_result);
+    }
 
     let mut volume_adjustment = "0".to_owned();
     if let Ok(volume_command_output) = volume_command_output_result {
@@ -127,12 +134,12 @@ fn main() {
         }
     }
 
-    fn exec_stream<P: AsRef<Path>>(binary: P, args: Vec<&str>) {
+    fn exec_stream<P: AsRef<Path>>(binary: P, args: Vec<&str>, display_name: &str) {
         let mut cmd = Command::new(binary.as_ref())
             .args(&args)
             .stdout(Stdio::piped())
             .spawn()
-            .unwrap();
+            .expect(("Unable to spawn ".to_owned() + display_name).as_str());
     
         {
             let stdout = cmd.stdout.as_mut().unwrap();
@@ -147,8 +154,8 @@ fn main() {
         cmd.wait().unwrap();
     }
 
-    let volume_filter_params = format!("volume={}", volume_adjustment);
-    let filter_params = volume_filter_params + "," + &settings.base_filter_params;
+    let volume_filter_params = if volume_adjustment != "0" { format!("volume={}dB,", volume_adjustment) } else { "".to_owned() };
+    let filter_params = volume_filter_params + &settings.base_filter_params;
 
     println!("Filter params: {:?}", filter_params);
 
@@ -165,5 +172,5 @@ fn main() {
 
     println!("Running: ffmpeg {}", ffmpeg_args_vec_display.join(" "));
 
-    exec_stream("ffmpeg", ffmpeg_args_vec.clone());
+    exec_stream(ffmpeg_path, ffmpeg_args_vec.clone(), "ffmpeg");
 }
