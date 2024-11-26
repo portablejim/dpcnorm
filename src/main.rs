@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 
 #[derive(Deserialize, Serialize)]
+#[serde(default="get_default_settings")]
 struct DpcNormSettings {
     base_filter_params: String,
+    output_bitrate: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -24,16 +26,21 @@ struct LoudnormData {
     target_offset: String,
 }
 
+fn get_default_settings() -> DpcNormSettings {
+    return  DpcNormSettings {
+        //base_filter_params: "speechnorm=e=6.25:r=0.00001".to_owned(),
+        base_filter_params: "loudnorm=I=-16".to_owned(),
+        output_bitrate: "192k".to_owned(),
+    };
+
+}
+
 fn main() {
 
     let exe_dir_opt = env::current_exe().ok();
     let config_path_opt = if let Some(exec_dir) = exe_dir_opt { Some(exec_dir.with_file_name("dpcnorm_settings.toml")) } else { None };
 
-    let default_settings = DpcNormSettings {
-        //base_filter_params: "speechnorm=e=6.25:r=0.00001".to_owned(),
-        base_filter_params: "loudnorm=I=-16".to_owned(),
-    };
-
+    let default_settings = get_default_settings();
     if let Some(config_path) = config_path_opt.clone() {
         if !config_path.exists() {
             println!("Config file not exists: {:?}", config_path);
@@ -46,10 +53,24 @@ fn main() {
     }
 
     let settings: DpcNormSettings = if let Some(config_path) = config_path_opt {
-        let mut config_file = File::open(config_path).expect("Failed to open config file");
+        let mut config_file = File::open(&config_path).expect("Failed to open config file");
         let mut config_file_contents = String::new();
         config_file.read_to_string(&mut config_file_contents).expect("Failed to read config file");
-        toml::from_str(&config_file_contents).unwrap_or(default_settings)
+        let parsed_config_maybe = toml::from_str(&config_file_contents);
+
+        let mut config_file = File::create(&config_path).expect("Failed to create config file");
+        if let Ok(parsed_config) = parsed_config_maybe {
+            let parsed_settings_string = toml::to_string(&parsed_config).expect("TOML settings serialization failed");
+            config_file.write_all(parsed_settings_string.as_bytes()).expect("Failed to write parsed settings to config file");
+            parsed_config
+        }
+        else {
+            // Failed to parse config, 
+            let default_settings_string = toml::to_string(&default_settings).expect("TOML settings serialization failed");
+            config_file.write_all(default_settings_string.as_bytes()).expect("Failed to write default settings to config file");
+
+            default_settings
+        }
     } else {
         default_settings
     };
@@ -225,7 +246,7 @@ fn main() {
 
     println!("Filter params: {:?}", filter_params);
 
-    let ffmpeg_args_vec = vec!("-hide_banner",  "-i", &input_file, "-b:a", "64k",  "-filter:a", &filter_params, &output_file);
+    let ffmpeg_args_vec = vec!("-hide_banner",  "-i", &input_file, "-b:a", &settings.output_bitrate,  "-filter:a", &filter_params, &output_file);
     let ffmpeg_args_vec_display = ffmpeg_args_vec.clone().iter()
             .map(|s| if s.contains(" ") {
                 "'".to_owned() + s + "'"
